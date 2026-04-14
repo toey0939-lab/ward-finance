@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>FinanceApp - Real-time Sync</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap');
+        
+        body {
+            font-family: 'Kanit', sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .card-white {
+            background: #ffffff;
+            border-radius: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e2e8f0;
+        }
+
+        .input-style {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            background: #ffffff;
+            outline: none;
+            transition: all 0.2s;
+            font-size: 16px; 
+        }
+
+        .input-style:focus {
+            border-color: #6366f1;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #6366f1;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+
+    <!-- Navbar -->
+    <nav class="bg-white border-b border-slate-200 px-6 py-4 sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto flex justify-between items-center">
+            <h1 class="text-xl font-bold text-indigo-600 flex items-center">
+                <i class="fa-solid fa-wallet mr-3"></i>FinanceApp
+            </h1>
+            <div class="flex items-center space-x-4">
+                <div id="syncStatus" class="flex items-center text-[10px] font-bold text-slate-400 uppercase">
+                    <span id="statusText" class="mr-2">ออนไลน์</span>
+                    <div id="statusDot" class="w-2 h-2 bg-green-500 rounded-full"></div>
+                </div>
+                <button onclick="fetchData()" class="p-2 text-slate-500 hover:text-indigo-600 transition-colors">
+                    <i class="fa-solid fa-arrows-rotate"></i>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-6xl mx-auto p-4 md:p-6 space-y-6">
+        
+        <!-- Dashboard Summary -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="card-white p-6 bg-indigo-600 text-white border-none shadow-lg shadow-indigo-100">
+                <p class="text-indigo-100 text-xs font-bold uppercase tracking-wider">เงินคงเหลือ</p>
+                <p id="balance" class="text-3xl font-bold mt-1">฿0.00</p>
+            </div>
+            <div class="card-white p-6">
+                <p class="text-slate-400 text-xs font-bold uppercase tracking-wider">รายรับรวม</p>
+                <p id="totalIncome" class="text-3xl font-bold text-emerald-500 mt-1">฿0.00</p>
+            </div>
+            <div class="card-white p-6">
+                <p class="text-slate-400 text-xs font-bold uppercase tracking-wider">รายจ่ายรวม</p>
+                <p id="totalExpense" class="text-3xl font-bold text-rose-500 mt-1">฿0.00</p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- Input Form -->
+            <div class="lg:col-span-1">
+                <div class="card-white p-6 sticky top-24">
+                    <h2 class="text-lg font-bold text-slate-800 mb-6 flex items-center">
+                        <i class="fa-solid fa-circle-plus text-indigo-600 mr-2"></i>เพิ่มรายการใหม่
+                    </h2>
+                    
+                    <div class="space-y-4">
+                        <!-- 1. วันที่ -->
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-400 uppercase mb-1 ml-1">วันที่</label>
+                            <input type="date" id="date" class="input-style text-sm">
+                        </div>
+
+                        <!-- 2. ประเภท -->
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-400 uppercase mb-1 ml-1">ประเภท</label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button onclick="setType('income')" id="typeIncome" class="py-2.5 rounded-xl border-2 border-slate-100 text-slate-500 font-bold transition-all">รายรับ</button>
+                                <button onclick="setType('expense')" id="typeExpense" class="py-2.5 rounded-xl border-2 border-slate-100 text-slate-500 font-bold transition-all">รายจ่าย</button>
+                            </div>
+                            <input type="hidden" id="type" value="expense">
+                        </div>
+
+                        <!-- 3. จำนวนเงิน -->
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-400 uppercase mb-1 ml-1">จำนวนเงิน (บาท)</label>
+                            <input type="number" id="amount" placeholder="0.00" class="input-style text-lg font-bold text-indigo-600">
+                        </div>
+
+                        <!-- 4. รายละเอียด -->
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-400 uppercase mb-1 ml-1">รายละเอียด</label>
+                            <input type="text" id="desc" placeholder="ระบุรายละเอียดที่นี่..." class="input-style text-sm">
+                        </div>
+
+                        <button id="submitBtn" onclick="submitData()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-2xl shadow-lg shadow-indigo-100 transition-all active:scale-95 flex justify-center items-center mt-2">
+                            <span id="btnText">บันทึกลง Google Sheets</span>
+                            <div id="btnSpinner" class="spinner ml-3 hidden"></div>
+                        </button>
+                    </div>
+
+                    <!-- Config Area -->
+                    <div class="mt-8 pt-6 border-t border-slate-100">
+                        <details class="text-[10px] text-slate-400 cursor-pointer">
+                            <summary class="font-bold uppercase tracking-widest">การตั้งค่า WEB APP URL</summary>
+                            <div class="mt-3 space-y-2">
+                                <input type="text" id="gsheetUrl" placeholder="วางลิงก์จาก Apps Script ที่นี่..." class="w-full p-2 border border-slate-200 rounded-lg text-[10px] outline-none">
+                                <button onclick="saveConfig()" class="w-full bg-slate-800 text-white py-2 rounded-lg font-bold uppercase tracking-wider">บันทึก URL</button>
+                            </div>
+                        </details>
+                    </div>
+                </div>
+            </div>
+
+            <!-- List and Chart -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Bar Chart -->
+                <div class="card-white p-6 h-[300px]">
+                    <h3 class="text-xs font-bold text-slate-400 mb-6 uppercase tracking-widest">สรุปภาพรวม</h3>
+                    <canvas id="barChart"></canvas>
+                </div>
+
+                <!-- Transaction Table -->
+                <div class="card-white overflow-hidden">
+                    <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/30">
+                        <h3 class="font-bold text-slate-800 text-sm">รายการล่าสุด (Live Data)</h3>
+                        <span id="dataStatus" class="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">กำลังโหลด...</span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left">
+                            <thead class="bg-slate-50/80 text-slate-400 text-[10px] uppercase font-bold">
+                                <tr>
+                                    <th class="px-6 py-4">วันที่</th>
+                                    <th class="px-6 py-4">ประเภท</th>
+                                    <th class="px-6 py-4">รายละเอียด</th>
+                                    <th class="px-6 py-4 text-right">จำนวนเงิน</th>
+                                </tr>
+                            </thead>
+                            <tbody id="transactionList" class="divide-y divide-slate-100">
+                                <tr>
+                                    <td colspan="4" class="px-6 py-12 text-center text-slate-400 text-sm italic">
+                                        กำลังรอการเชื่อมต่อกับ Google Sheets...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal Alert -->
+    <div id="customAlert" class="fixed inset-0 z-[100] hidden flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+        <div class="bg-white rounded-3xl p-8 max-w-xs w-full shadow-2xl text-center animate-fade">
+            <div id="alertIcon" class="text-4xl mb-4"></div>
+            <h3 id="alertTitle" class="text-lg font-bold mb-1"></h3>
+            <p id="alertMsg" class="text-sm text-slate-500 mb-6"></p>
+            <button onclick="closeAlert()" class="w-full bg-indigo-600 text-white py-3 rounded-2xl font-bold shadow-lg shadow-indigo-100">รับทราบ</button>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * คุณสามารถวาง Web App URL ที่นี่ได้เลย
+         * เช่น: const EMBEDDED_URL = "https://script.google.com/macros/s/XXXXX/exec";
+         */
+        const EMBEDDED_URL = "https://script.google.com/macros/s/AKfycbwRfJsggRs_U6c--4osT81E3eMwrCGS9aWMZKbRhIrBvusT3xBDCSdSjPf-e_bOZMTF8w/exec"; 
+
+        let SCRIPT_URL = EMBEDDED_URL || localStorage.getItem('gsheet_sync_url') || "";
+        let transactions = [];
+        let barChart;
+
+        // Initialize
+        document.getElementById('date').valueAsDate = new Date();
+        document.getElementById('gsheetUrl').value = SCRIPT_URL;
+        setType('expense');
+
+        function setType(type) {
+            document.getElementById('type').value = type;
+            const incBtn = document.getElementById('typeIncome');
+            const expBtn = document.getElementById('typeExpense');
+
+            if (type === 'income') {
+                incBtn.className = "py-2.5 rounded-xl border-2 border-emerald-500 bg-emerald-50 text-emerald-600 font-bold transition-all shadow-sm";
+                expBtn.className = "py-2.5 rounded-xl border-2 border-slate-100 text-slate-400 font-medium transition-all hover:bg-slate-50";
+            } else {
+                expBtn.className = "py-2.5 rounded-xl border-2 border-rose-500 bg-rose-50 text-rose-600 font-bold transition-all shadow-sm";
+                incBtn.className = "py-2.5 rounded-xl border-2 border-slate-100 text-slate-400 font-medium transition-all hover:bg-slate-50";
+            }
+        }
+
+        function saveConfig() {
+            const url = document.getElementById('gsheetUrl').value.trim();
+            if (url) {
+                localStorage.setItem('gsheet_sync_url', url);
+                SCRIPT_URL = url;
+                showModal('สำเร็จ', 'เชื่อมต่อ Google Sheets แล้ว', '✅');
+                fetchData();
+            }
+        }
+
+        async function fetchData() {
+            if (!SCRIPT_URL) {
+                document.getElementById('transactionList').innerHTML = '<tr><td colspan="4" class="px-6 py-8 text-center text-rose-400 text-xs font-bold uppercase">กรุณากรอก Web App URL ในส่วนการตั้งค่า</td></tr>';
+                document.getElementById('statusText').innerText = 'ออฟไลน์';
+                document.getElementById('statusDot').className = 'w-2 h-2 bg-rose-500 rounded-full';
+                return;
+            }
+
+            try {
+                const response = await fetch(SCRIPT_URL + "?action=read");
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    transactions = result.data;
+                    renderUI();
+                    document.getElementById('dataStatus').innerText = `อัปเดต: ${new Date().toLocaleTimeString()}`;
+                    document.getElementById('statusText').innerText = 'ออนไลน์';
+                    document.getElementById('statusDot').className = 'w-2 h-2 bg-green-500 rounded-full';
+                }
+            } catch (error) {
+                console.error('Fetch error');
+                document.getElementById('statusText').innerText = 'เชื่อมต่อล้มเหลว';
+                document.getElementById('statusDot').className = 'w-2 h-2 bg-amber-500 rounded-full';
+            }
+        }
+
+        async function submitData() {
+            if (!SCRIPT_URL) {
+                showModal('แจ้งเตือน', 'กรุณาตั้งค่า URL ก่อนบันทึก', '⚠️');
+                return;
+            }
+
+            const data = {
+                action: 'create',
+                date: document.getElementById('date').value,
+                type: document.getElementById('type').value,
+                amount: parseFloat(document.getElementById('amount').value),
+                desc: document.getElementById('desc').value.trim() || "-"
+            };
+
+            if (isNaN(data.amount) || data.amount <= 0) {
+                showModal('ข้อมูลไม่ครบ', 'กรุณาระบุจำนวนเงิน', '⚠️');
+                return;
+            }
+
+            const btn = document.getElementById('submitBtn');
+            const spinner = document.getElementById('btnSpinner');
+            const btnText = document.getElementById('btnText');
+            
+            btn.disabled = true;
+            spinner.classList.remove('hidden');
+            btnText.innerText = "กำลังบันทึก...";
+
+            try {
+                await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    body: JSON.stringify(data)
+                });
+
+                showModal('บันทึกสำเร็จ', 'ข้อมูลถูกส่งไปยัง Sheets แล้ว', '✨');
+                
+                // Reset Form
+                document.getElementById('amount').value = '';
+                document.getElementById('desc').value = '';
+                
+                // Refresh list
+                setTimeout(fetchData, 1500); 
+
+            } catch (error) {
+                showModal('เกิดข้อผิดพลาด', 'ไม่สามารถบันทึกได้ กรุณาลองใหม่', '❌');
+            } finally {
+                btn.disabled = false;
+                spinner.classList.add('hidden');
+                btnText.innerText = "บันทึกลง Google Sheets";
+            }
+        }
+
+        function renderUI() {
+            const list = document.getElementById('transactionList');
+            list.innerHTML = '';
+
+            let totalInc = 0;
+            let totalExp = 0;
+
+            if (transactions.length === 0) {
+                list.innerHTML = '<tr><td colspan="4" class="px-6 py-8 text-center text-slate-400 text-sm">ยังไม่มีข้อมูลใน Sheets</td></tr>';
+            }
+
+            transactions.forEach(t => {
+                const amount = parseFloat(t.amount);
+                const isIncome = t.type === 'income';
+                if (isIncome) totalInc += amount;
+                else totalExp += amount;
+
+                const row = document.createElement('tr');
+                row.className = "hover:bg-slate-50 transition-colors";
+                row.innerHTML = `
+                    <td class="px-6 py-4 text-[12px] text-slate-400 font-medium">${t.date}</td>
+                    <td class="px-6 py-4">
+                        <span class="text-[9px] px-2 py-1 rounded-md font-bold uppercase ${isIncome ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}">
+                            ${isIncome ? 'รายรับ' : 'รายจ่าย'}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 text-sm font-semibold text-slate-700">${t.desc}</td>
+                    <td class="px-6 py-4 text-right font-bold ${isIncome ? 'text-emerald-500' : 'text-slate-800'}">
+                        ${isIncome ? '+' : ''}฿${amount.toLocaleString(undefined, {minimumFractionDigits: 2})}
+                    </td>
+                `;
+                list.appendChild(row);
+            });
+
+            document.getElementById('totalIncome').innerText = `฿${totalInc.toLocaleString()}`;
+            document.getElementById('totalExpense').innerText = `฿${totalExp.toLocaleString()}`;
+            document.getElementById('balance').innerText = `฿${(totalInc - totalExp).toLocaleString()}`;
+
+            updateChart(totalInc, totalExp);
+        }
+
+        function updateChart(inc, exp) {
+            const ctx = document.getElementById('barChart').getContext('2d');
+            if (barChart) barChart.destroy();
+            barChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['รายรับ', 'รายจ่าย'],
+                    datasets: [{
+                        data: [inc, exp],
+                        backgroundColor: ['#10b981', '#f43f5e'],
+                        borderRadius: 12,
+                        barThickness: 50
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true, grid: { borderDash: [5, 5] } },
+                        x: { grid: { display: false } }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        function showModal(title, msg, icon) {
+            document.getElementById('alertTitle').innerText = title;
+            document.getElementById('alertMsg').innerText = msg;
+            document.getElementById('alertIcon').innerText = icon;
+            document.getElementById('customAlert').classList.remove('hidden');
+        }
+
+        function closeAlert() {
+            document.getElementById('customAlert').classList.add('hidden');
+        }
+
+        window.onload = fetchData;
+    </script>
+</body>
+</html>
